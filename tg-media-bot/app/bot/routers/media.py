@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, Message
 from app.bot.callbacks import AuthRetryCallback, MediaChoiceCallback
 from app.bot.context import AppContext
 from app.bot.keyboards import media_choice_keyboard
-from app.services.downloader import AuthRequiredError
+from app.services.downloader import AuthRequiredError, DependencyMissingError
 from app.services.queue import DownloadTask
 from app.services.source_adapters import detect_source, is_vk_wall_post_url
 from app.services.types import AuthContext
@@ -71,6 +71,9 @@ async def url_message_handler(message: Message, app_ctx: AppContext) -> None:
             "Для этой ссылки нужна авторизация. Нажмите кнопку ниже.",
             reply_markup=media_choice_keyboard(job_id=job_id, has_video=adapter.can_video, has_audio=adapter.can_audio),
         )
+        return
+    except DependencyMissingError as exc:
+        await message.answer(str(exc))
         return
     except Exception:
         await message.answer("Не удалось обработать ссылку. Проверьте формат и попробуйте еще раз.")

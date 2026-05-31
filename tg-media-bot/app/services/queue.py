@@ -8,7 +8,12 @@ from aiogram import Bot
 from aiogram.types import FSInputFile
 
 from app.bot.keyboards import auth_retry_keyboard
-from app.services.downloader import AuthRequiredError, SourceUnsupportedError, YtDlpDownloader
+from app.services.downloader import (
+    AuthRequiredError,
+    DependencyMissingError,
+    SourceUnsupportedError,
+    YtDlpDownloader,
+)
 from app.services.limits import LimitError
 from app.services.source_adapters import SourceAdapter
 from app.services.types import AuthContext
@@ -117,6 +122,9 @@ class DownloadQueue:
             await self._bot.send_message(task.chat_id, f"Не могу отправить: {exc}")
         except SourceUnsupportedError as exc:
             await self._jobs.update_status(task.job_id, "failed", error_code="UNSUPPORTED")
+            await self._bot.send_message(task.chat_id, str(exc))
+        except DependencyMissingError as exc:
+            await self._jobs.update_status(task.job_id, "failed", error_code="DEPENDENCY_MISSING")
             await self._bot.send_message(task.chat_id, str(exc))
         except Exception:
             await self._jobs.update_status(task.job_id, "failed", error_code="DOWNLOAD_ERROR")

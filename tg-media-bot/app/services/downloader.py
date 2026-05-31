@@ -4,8 +4,14 @@ from pathlib import Path
 from typing import Any
 import asyncio
 
-from yt_dlp import YoutubeDL
-from yt_dlp.utils import DownloadError
+try:
+    from yt_dlp import YoutubeDL
+    from yt_dlp.utils import DownloadError
+except ModuleNotFoundError:
+    YoutubeDL = None
+
+    class DownloadError(Exception):
+        pass
 
 from app.config import Settings
 from app.services.limits import validate_limits
@@ -18,6 +24,10 @@ class AuthRequiredError(Exception):
 
 
 class SourceUnsupportedError(Exception):
+    pass
+
+
+class DependencyMissingError(Exception):
     pass
 
 
@@ -114,6 +124,10 @@ class YtDlpDownloader:
         download: bool,
         media_kind: str,
     ) -> dict[str, Any]:
+        if YoutubeDL is None:
+            raise DependencyMissingError(
+                "На сервере не установлен yt-dlp. Установите зависимости: pip install -e ."
+            )
         options = self._build_options(adapter, auth_context, download, media_kind)
         with YoutubeDL(options) as ydl:
             try:
