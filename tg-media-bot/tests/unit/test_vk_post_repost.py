@@ -83,7 +83,7 @@ def test_vk_post_options_allow_playlist_and_skip_format_selection() -> None:
     assert "format" not in options
 
 
-def test_video_options_prioritize_progressive_mp4() -> None:
+def test_youtube_video_options_require_720p_or_higher() -> None:
     downloader = YtDlpDownloader(_settings())
     options = downloader._build_options(
         adapter=type("A", (), {"name": "youtube"})(),
@@ -93,6 +93,7 @@ def test_video_options_prioritize_progressive_mp4() -> None:
     )
 
     fmt = options["format"]
+    assert "height>=720" in fmt
     assert "best[ext=mp4][acodec!=none][vcodec!=none]" in fmt
     assert options["merge_output_format"] == "mp4"
 
@@ -123,6 +124,17 @@ def test_has_video_stream_false_for_audio_only_tiktok_photo_fallback() -> None:
     }
     assert not YtDlpDownloader._has_video_stream(info)
     assert YtDlpDownloader._has_audio_stream(info)
+
+
+def test_has_video_stream_with_min_height_filter() -> None:
+    info = {
+        "formats": [
+            {"format_id": "18", "vcodec": "h264", "acodec": "aac", "height": 360},
+            {"format_id": "22", "vcodec": "h264", "acodec": "aac", "height": 720},
+        ]
+    }
+    assert YtDlpDownloader._has_video_stream(info, min_video_height=720)
+    assert not YtDlpDownloader._has_video_stream(info, min_video_height=1080)
 
 
 def test_extract_photo_urls_deduplicates_query_variants() -> None:

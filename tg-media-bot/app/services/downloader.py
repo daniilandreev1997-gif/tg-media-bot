@@ -220,14 +220,32 @@ class YtDlpDownloader:
                 }
             ]
         elif media_kind == "video":
-            options["format"] = (
-                "best[ext=mp4][acodec!=none][vcodec!=none]/"
-                "best[acodec!=none][vcodec!=none]/"
-                "bestvideo+bestaudio/best"
-            )
+            if adapter.name == "youtube":
+                options["format"] = (
+                    "best[ext=mp4][height<=1080][height>=720][acodec!=none][vcodec!=none]/"
+                    "best[height<=1080][height>=720][acodec!=none][vcodec!=none]/"
+                    "bestvideo[height<=1080][height>=720]+bestaudio[ext=m4a]/"
+                    "bestvideo[height<=1080][height>=720]+bestaudio/"
+                    "best[ext=mp4][acodec!=none][vcodec!=none]/"
+                    "best[acodec!=none][vcodec!=none]/"
+                    "bestvideo+bestaudio/best"
+                )
+            else:
+                options["format"] = (
+                    "best[ext=mp4][acodec!=none][vcodec!=none]/"
+                    "best[acodec!=none][vcodec!=none]/"
+                    "bestvideo+bestaudio/best"
+                )
             options["merge_output_format"] = "mp4"
         elif media_kind == "video_safe":
-            options["format"] = "best[ext=mp4]/best"
+            if adapter.name == "youtube":
+                options["format"] = (
+                    "best[ext=mp4][height<=1080][height>=720][acodec!=none][vcodec!=none]/"
+                    "best[height<=1080][height>=720][acodec!=none][vcodec!=none]/"
+                    "best[ext=mp4][acodec!=none][vcodec!=none]/best"
+                )
+            else:
+                options["format"] = "best[ext=mp4]/best"
 
         if not download:
             options["skip_download"] = True
@@ -310,20 +328,33 @@ class YtDlpDownloader:
         return text[: max(0, limit - 3)].rstrip() + "..."
 
     @staticmethod
-    def _has_video_stream(info: dict[str, Any]) -> bool:
+    def _has_video_stream(info: dict[str, Any], min_video_height: int = 0) -> bool:
+        def is_good_video(fmt: dict[str, Any]) -> bool:
+            if fmt.get("vcodec") in (None, "none"):
+                return False
+            if min_video_height <= 0:
+                return True
+            height = fmt.get("height")
+            return isinstance(height, (int, float)) and int(height) >= min_video_height
+
         formats = info.get("formats")
         if isinstance(formats, list):
             for fmt in formats:
                 if not isinstance(fmt, dict):
                     continue
-                if fmt.get("vcodec") not in (None, "none"):
+                if is_good_video(fmt):
                     return True
         requested = info.get("requested_formats")
         if isinstance(requested, list):
             for fmt in requested:
-                if isinstance(fmt, dict) and fmt.get("vcodec") not in (None, "none"):
+                if isinstance(fmt, dict) and is_good_video(fmt):
                     return True
-        return info.get("vcodec") not in (None, "none")
+        if info.get("vcodec") in (None, "none"):
+            return False
+        if min_video_height <= 0:
+            return True
+        height = info.get("height")
+        return isinstance(height, (int, float)) and int(height) >= min_video_height
 
     @staticmethod
     def _has_audio_stream(info: dict[str, Any]) -> bool:
