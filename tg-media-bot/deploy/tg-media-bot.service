@@ -1,0 +1,16 @@
+﻿[Unit]
+Description=TG Media Bot
+After=network.target
+
+[Service]
+Type=simple
+User=telegrambot
+Group=telegrambot
+WorkingDirectory=/opt/tg-media-bot
+EnvironmentFile=/opt/tg-media-bot/.env
+ExecStart=/opt/tg-media-bot/.venv/bin/python -m app.main
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
