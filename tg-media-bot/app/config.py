@@ -5,7 +5,11 @@ from pathlib import Path
 import os
 from typing import Literal
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv as _load_dotenv
+except ModuleNotFoundError:
+    def _load_dotenv(*_args, **_kwargs) -> bool:
+        return False
 
 UpdateMode = Literal["polling", "webhook"]
 
@@ -67,7 +71,7 @@ def _resolve_path(base_dir: Path, raw: str | None, default_rel: str) -> Path:
 
 def load_settings() -> Settings:
     base_dir = Path(__file__).resolve().parent.parent
-    load_dotenv(base_dir / ".env")
+    _load_dotenv(base_dir / ".env")
 
     bot_token = os.getenv("BOT_TOKEN", "").strip()
     if not bot_token:
