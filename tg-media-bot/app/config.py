@@ -26,6 +26,7 @@ class Settings:
     admin_ids: set[int]
     max_duration_min: int
     max_file_mb: int
+    telegram_upload_max_mb: int
     credential_ttl_days: int
     workers_count: int
     download_dir: Path
@@ -35,6 +36,10 @@ class Settings:
     @property
     def max_file_bytes(self) -> int:
         return self.max_file_mb * 1024 * 1024
+
+    @property
+    def telegram_upload_max_bytes(self) -> int:
+        return self.telegram_upload_max_mb * 1024 * 1024
 
     @property
     def webhook_url(self) -> str | None:
@@ -88,6 +93,7 @@ def load_settings() -> Settings:
         admin_ids=parse_admin_ids(os.getenv("ADMIN_IDS")),
         max_duration_min=int(os.getenv("MAX_DURATION_MIN", "60")),
         max_file_mb=int(os.getenv("MAX_FILE_MB", "500")),
+        telegram_upload_max_mb=int(os.getenv("TELEGRAM_UPLOAD_MAX_MB", "49")),
         credential_ttl_days=int(os.getenv("CREDENTIAL_TTL_DAYS", "7")),
         workers_count=max(1, int(os.getenv("WORKERS_COUNT", "2"))),
         download_dir=_resolve_path(base_dir, os.getenv("DOWNLOAD_DIR"), "data/downloads"),

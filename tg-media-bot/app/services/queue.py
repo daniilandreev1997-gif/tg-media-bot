@@ -2,11 +2,12 @@
 
 from dataclasses import dataclass
 import asyncio
+import logging
 from pathlib import Path
 
 from aiogram import Bot
 from aiogram.types import FSInputFile, InputMediaPhoto
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 
 from app.bot.keyboards import auth_retry_keyboard
 from app.services.downloader import (
@@ -19,6 +20,8 @@ from app.services.limits import LimitError
 from app.services.source_adapters import SourceAdapter
 from app.services.types import AuthContext
 from app.storage.repositories import JobRepository
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -147,9 +150,15 @@ class DownloadQueue:
             await self._jobs.update_status(task.job_id, "failed", error_code="DEPENDENCY_MISSING")
             await self._bot.send_message(task.chat_id, str(exc))
         except TelegramBadRequest as exc:
+            logger.exception("Telegram rejected download task %s", task.job_id)
             await self._jobs.update_status(task.job_id, "failed", error_code="TELEGRAM_BAD_REQUEST")
             await self._bot.send_message(task.chat_id, self._friendly_telegram_error(exc))
+        except TelegramAPIError as exc:
+            logger.exception("Telegram API failed for download task %s", task.job_id)
+            await self._jobs.update_status(task.job_id, "failed", error_code="TELEGRAM_API_ERROR")
+            await self._bot.send_message(task.chat_id, self._friendly_telegram_error(exc))
         except Exception:
+            logger.exception("Download task %s failed", task.job_id)
             await self._jobs.update_status(task.job_id, "failed", error_code="DOWNLOAD_ERROR")
             await self._bot.send_message(
                 task.chat_id,
@@ -175,7 +184,7 @@ class DownloadQueue:
         await self._bot.send_media_group(chat_id=chat_id, media=media)
 
     @staticmethod
-    def _friendly_telegram_error(exc: TelegramBadRequest) -> str:
+    def _friendly_telegram_error(exc: TelegramAPIError) -> str:
         message = str(exc).lower()
         if "file is too big" in message or "request entity too large" in message:
             return "Видео получилось слишком большим для отправки Telegram-ботом. Попробуйте аудио."

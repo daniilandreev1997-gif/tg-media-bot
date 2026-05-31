@@ -16,6 +16,7 @@ def _settings() -> Settings:
         admin_ids=set(),
         max_duration_min=60,
         max_file_mb=500,
+        telegram_upload_max_mb=49,
         credential_ttl_days=7,
         workers_count=1,
         download_dir=Path("."),
@@ -93,9 +94,32 @@ def test_youtube_video_options_require_720p_or_higher() -> None:
     )
 
     fmt = options["format"]
-    assert "height>=720" in fmt
+    assert "width>=1280" in fmt
     assert "best[ext=mp4][acodec!=none][vcodec!=none]" in fmt
     assert options["merge_output_format"] == "mp4"
+
+
+def test_youtube_telegram_compact_options_use_upload_limit() -> None:
+    downloader = YtDlpDownloader(_settings())
+    options = downloader._build_options(
+        adapter=type("A", (), {"name": "youtube"})(),
+        auth_context=None,
+        download=True,
+        media_kind="video_telegram",
+    )
+
+    fmt = options["format"]
+    assert "filesize<49M" in fmt
+    assert "filesize_approx<49M" in fmt
+    assert "width>=1280" in fmt
+
+
+def test_youtube_large_video_should_use_telegram_compact_copy() -> None:
+    downloader = YtDlpDownloader(_settings())
+    adapter = type("A", (), {"name": "youtube"})()
+
+    assert downloader._should_use_telegram_compact_copy(adapter, "video", 50 * 1024 * 1024)
+    assert not downloader._should_use_telegram_compact_copy(adapter, "video", 10 * 1024 * 1024)
 
 
 def test_resolve_downloaded_file_from_playlist_entries() -> None:

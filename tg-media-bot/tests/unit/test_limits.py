@@ -18,6 +18,7 @@ def _settings() -> Settings:
         admin_ids=set(),
         max_duration_min=60,
         max_file_mb=500,
+        telegram_upload_max_mb=49,
         credential_ttl_days=7,
         workers_count=1,
         download_dir=Path("."),

@@ -9,6 +9,7 @@ def _set_base_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BOT_TOKEN", "dummy_token")
     monkeypatch.setenv("MAX_DURATION_MIN", "60")
     monkeypatch.setenv("MAX_FILE_MB", "500")
+    monkeypatch.setenv("TELEGRAM_UPLOAD_MAX_MB", "49")
     monkeypatch.setenv("CREDENTIAL_TTL_DAYS", "7")
     monkeypatch.setenv("WORKERS_COUNT", "1")
     monkeypatch.setenv("DOWNLOAD_DIR", "./data/downloads")

@@ -139,6 +139,22 @@ class YtDlpDownloader:
         duration_int = int(duration) if isinstance(duration, (int, float)) else None
         size_bytes = file_path.stat().st_size
         validate_limits(self._settings, duration_int, size_bytes)
+        if self._should_use_telegram_compact_copy(adapter, media_kind, size_bytes):
+            info = await asyncio.to_thread(
+                self._extract_info,
+                candidate_url,
+                adapter,
+                auth_context,
+                True,
+                "video_telegram",
+            )
+            file_path = self._resolve_downloaded_file(info)
+            if not file_path.exists():
+                raise RuntimeError("Файл не найден после загрузки")
+            duration = info.get("duration")
+            duration_int = int(duration) if isinstance(duration, (int, float)) else None
+            size_bytes = file_path.stat().st_size
+            validate_limits(self._settings, duration_int, size_bytes)
 
         media_type = "audio" if media_kind == "audio" else "video"
         if file_path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}:
@@ -222,10 +238,10 @@ class YtDlpDownloader:
         elif media_kind == "video":
             if adapter.name == "youtube":
                 options["format"] = (
-                    "best[ext=mp4][height<=1080][height>=720][acodec!=none][vcodec!=none]/"
-                    "best[height<=1080][height>=720][acodec!=none][vcodec!=none]/"
-                    "bestvideo[height<=1080][height>=720]+bestaudio[ext=m4a]/"
-                    "bestvideo[height<=1080][height>=720]+bestaudio/"
+                    "best[ext=mp4][width<=1920][width>=1280][acodec!=none][vcodec!=none]/"
+                    "best[width<=1920][width>=1280][acodec!=none][vcodec!=none]/"
+                    "bestvideo[width<=1920][width>=1280]+bestaudio[ext=m4a]/"
+                    "bestvideo[width<=1920][width>=1280]+bestaudio/"
                     "best[ext=mp4][acodec!=none][vcodec!=none]/"
                     "best[acodec!=none][vcodec!=none]/"
                     "bestvideo+bestaudio/best"
@@ -240,12 +256,20 @@ class YtDlpDownloader:
         elif media_kind == "video_safe":
             if adapter.name == "youtube":
                 options["format"] = (
-                    "best[ext=mp4][height<=1080][height>=720][acodec!=none][vcodec!=none]/"
-                    "best[height<=1080][height>=720][acodec!=none][vcodec!=none]/"
+                    "best[ext=mp4][width<=1920][width>=1280][acodec!=none][vcodec!=none]/"
+                    "best[width<=1920][width>=1280][acodec!=none][vcodec!=none]/"
                     "best[ext=mp4][acodec!=none][vcodec!=none]/best"
                 )
             else:
                 options["format"] = "best[ext=mp4]/best"
+        elif media_kind == "video_telegram":
+            max_upload = f"{self._settings.telegram_upload_max_mb}M"
+            options["format"] = (
+                f"best[ext=mp4][filesize<{max_upload}][width>=1280][acodec!=none][vcodec!=none]/"
+                f"best[ext=mp4][filesize_approx<{max_upload}][width>=1280][acodec!=none][vcodec!=none]/"
+                "best[ext=mp4][width<=1280][acodec!=none][vcodec!=none]/"
+                "best[ext=mp4][acodec!=none][vcodec!=none]/best"
+            )
 
         if not download:
             options["skip_download"] = True
@@ -400,6 +424,18 @@ class YtDlpDownloader:
     def _is_mux_postprocessing_error(message: str) -> bool:
         lowered = message.lower()
         return "postprocessing" in lowered or "stream #1:0" in lowered or "ffmpeg" in lowered
+
+    def _should_use_telegram_compact_copy(
+        self,
+        adapter: SourceAdapter,
+        media_kind: str,
+        size_bytes: int,
+    ) -> bool:
+        return (
+            adapter.name == "youtube"
+            and media_kind == "video"
+            and size_bytes > self._settings.telegram_upload_max_bytes
+        )
 
     def _resolve_downloaded_file(self, info: dict[str, Any]) -> Path:
         requested = info.get("requested_downloads")
