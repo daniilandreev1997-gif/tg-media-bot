@@ -10,7 +10,7 @@ from app.bot.context import AppContext
 from app.bot.keyboards import media_choice_keyboard
 from app.services.downloader import AuthRequiredError, DependencyMissingError
 from app.services.queue import DownloadTask
-from app.services.source_adapters import detect_source, is_vk_wall_post_url
+from app.services.source_adapters import detect_source, is_tiktok_photo_url, is_vk_wall_post_url
 from app.services.types import AuthContext
 
 router = Router(name="media")
@@ -61,6 +61,19 @@ async def url_message_handler(message: Message, app_ctx: AppContext) -> None:
             )
         )
         await message.answer("Делаю репост поста VK. Это может занять немного времени.")
+        return
+    if adapter.name == "tiktok" and is_tiktok_photo_url(text):
+        job_id = await app_ctx.jobs.create(user_id=user_id, url=text, source="tiktok_photo", status="queued")
+        await app_ctx.queue.enqueue(
+            DownloadTask(
+                job_id=job_id,
+                chat_id=message.chat.id,
+                url=text,
+                adapter=adapter,
+                media_kind="tiktok_photo",
+            )
+        )
+        await message.answer("Распознал фото-пост TikTok. Сейчас отправлю фото.")
         return
 
     try:
@@ -211,6 +224,8 @@ async def credentials_handler(message: Message, state: FSMContext, app_ctx: AppC
     media_kind = "audio" if not adapter.can_video else "video"
     if job.get("source") == "vk_post":
         media_kind = "vk_post_repost"
+    elif job.get("source") == "tiktok_photo":
+        media_kind = "tiktok_photo"
     await app_ctx.jobs.update_status(job_id, "queued")
     await app_ctx.queue.enqueue(
         DownloadTask(

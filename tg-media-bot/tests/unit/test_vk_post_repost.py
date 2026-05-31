@@ -81,3 +81,43 @@ def test_vk_post_options_allow_playlist_and_skip_format_selection() -> None:
 
     assert options["noplaylist"] is False
     assert "format" not in options
+
+
+def test_resolve_downloaded_file_from_playlist_entries() -> None:
+    downloader = YtDlpDownloader(_settings())
+    info = {
+        "_type": "playlist",
+        "entries": [
+            {
+                "requested_downloads": [
+                    {
+                        "filepath": "/tmp/example.mp4",
+                    }
+                ]
+            }
+        ],
+    }
+    path = downloader._resolve_downloaded_file(info)
+    assert path.as_posix() == "/tmp/example.mp4"
+
+
+def test_has_video_stream_false_for_audio_only_tiktok_photo_fallback() -> None:
+    info = {
+        "formats": [
+            {"format_id": "audio", "vcodec": "none", "acodec": "mp3"},
+        ]
+    }
+    assert not YtDlpDownloader._has_video_stream(info)
+    assert YtDlpDownloader._has_audio_stream(info)
+
+
+def test_extract_photo_urls_deduplicates_query_variants() -> None:
+    info = {
+        "thumbnail": "https://example.com/a.jpg?x=1",
+        "thumbnails": [
+            {"url": "https://example.com/a.jpg?x=2"},
+            {"url": "https://example.com/b.jpg"},
+        ],
+    }
+    urls = YtDlpDownloader._extract_photo_urls(info)
+    assert urls == ["https://example.com/a.jpg?x=1", "https://example.com/b.jpg"]

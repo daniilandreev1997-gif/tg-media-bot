@@ -15,7 +15,11 @@ except ModuleNotFoundError:
 
 from app.config import Settings
 from app.services.limits import validate_limits
-from app.services.source_adapters import SourceAdapter
+from app.services.source_adapters import (
+    SourceAdapter,
+    is_tiktok_photo_url,
+    tiktok_photo_to_video_url,
+)
 from app.services.types import AuthContext, DownloadResult, MediaInfoResult
 
 
@@ -47,8 +51,8 @@ class YtDlpDownloader:
             "video",
         )
         duration = info.get("duration")
-        has_audio = bool(info.get("requested_formats") or info.get("formats") or adapter.can_audio)
-        has_video = bool(adapter.can_video)
+        has_audio = self._has_audio_stream(info) if adapter.can_audio else False
+        has_video = self._has_video_stream(info) if adapter.can_video else False
         return MediaInfoResult(
             title=str(info.get("title") or "Без названия"),
             source=adapter.name,
@@ -56,6 +60,41 @@ class YtDlpDownloader:
             has_video=has_video,
             has_audio=has_audio,
         )
+
+    async def fetch_tiktok_photo_urls(
+        self,
+        url: str,
+        adapter: SourceAdapter,
+        auth_context: AuthContext | None,
+    ) -> tuple[list[str], str]:
+        candidates = [url]
+        if is_tiktok_photo_url(url):
+            converted = tiktok_photo_to_video_url(url)
+            if converted not in candidates:
+                candidates.insert(0, converted)
+
+        last_error: Exception | None = None
+        for candidate in candidates:
+            try:
+                info = await asyncio.to_thread(
+                    self._extract_info,
+                    candidate,
+                    adapter,
+                    auth_context,
+                    False,
+                    "tiktok_photo",
+                )
+                photo_urls = self._extract_photo_urls(info)
+                title = str(info.get("title") or "TikTok photo")
+                if photo_urls:
+                    return photo_urls, title
+            except Exception as exc:
+                last_error = exc
+                continue
+
+        if last_error is not None:
+            raise last_error
+        raise SourceUnsupportedError("Не удалось извлечь фото из TikTok по этой ссылке.")
 
     async def download(
         self,
@@ -69,14 +108,28 @@ class YtDlpDownloader:
         if media_kind == "video" and not adapter.can_video:
             raise SourceUnsupportedError("Для этого источника видео недоступно.")
 
-        info = await asyncio.to_thread(
-            self._extract_info,
-            url,
-            adapter,
-            auth_context,
-            True,
-            media_kind,
-        )
+        candidate_url = tiktok_photo_to_video_url(url) if is_tiktok_photo_url(url) else url
+        try:
+            info = await asyncio.to_thread(
+                self._extract_info,
+                candidate_url,
+                adapter,
+                auth_context,
+                True,
+                media_kind,
+            )
+        except DownloadError as exc:
+            if media_kind != "video" or not self._is_mux_postprocessing_error(str(exc)):
+                raise
+            # Fallback to a progressive single-file format when ffmpeg merge fails.
+            info = await asyncio.to_thread(
+                self._extract_info,
+                candidate_url,
+                adapter,
+                auth_context,
+                True,
+                "video_safe",
+            )
 
         file_path = self._resolve_downloaded_file(info)
         if not file_path.exists():
@@ -169,6 +222,8 @@ class YtDlpDownloader:
         elif media_kind == "video":
             options["format"] = "bestvideo+bestaudio/best"
             options["merge_output_format"] = "mp4"
+        elif media_kind == "video_safe":
+            options["format"] = "best[ext=mp4]/best"
 
         if not download:
             options["skip_download"] = True
@@ -250,6 +305,67 @@ class YtDlpDownloader:
             return text
         return text[: max(0, limit - 3)].rstrip() + "..."
 
+    @staticmethod
+    def _has_video_stream(info: dict[str, Any]) -> bool:
+        formats = info.get("formats")
+        if isinstance(formats, list):
+            for fmt in formats:
+                if not isinstance(fmt, dict):
+                    continue
+                if fmt.get("vcodec") not in (None, "none"):
+                    return True
+        requested = info.get("requested_formats")
+        if isinstance(requested, list):
+            for fmt in requested:
+                if isinstance(fmt, dict) and fmt.get("vcodec") not in (None, "none"):
+                    return True
+        return info.get("vcodec") not in (None, "none")
+
+    @staticmethod
+    def _has_audio_stream(info: dict[str, Any]) -> bool:
+        formats = info.get("formats")
+        if isinstance(formats, list):
+            for fmt in formats:
+                if not isinstance(fmt, dict):
+                    continue
+                if fmt.get("acodec") not in (None, "none"):
+                    return True
+        requested = info.get("requested_formats")
+        if isinstance(requested, list):
+            for fmt in requested:
+                if isinstance(fmt, dict) and fmt.get("acodec") not in (None, "none"):
+                    return True
+        return info.get("acodec") not in (None, "none")
+
+    @staticmethod
+    def _extract_photo_urls(info: dict[str, Any]) -> list[str]:
+        urls: list[str] = []
+        thumbnail = info.get("thumbnail")
+        if isinstance(thumbnail, str) and thumbnail.startswith("http"):
+            urls.append(thumbnail)
+        thumbs = info.get("thumbnails")
+        if isinstance(thumbs, list):
+            for thumb in thumbs:
+                if not isinstance(thumb, dict):
+                    continue
+                url = thumb.get("url")
+                if isinstance(url, str) and url.startswith("http"):
+                    urls.append(url)
+        dedup: list[str] = []
+        seen: set[str] = set()
+        for url in urls:
+            normalized = url.split("?")[0]
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            dedup.append(url)
+        return dedup
+
+    @staticmethod
+    def _is_mux_postprocessing_error(message: str) -> bool:
+        lowered = message.lower()
+        return "postprocessing" in lowered or "stream #1:0" in lowered or "ffmpeg" in lowered
+
     def _resolve_downloaded_file(self, info: dict[str, Any]) -> Path:
         requested = info.get("requested_downloads")
         if isinstance(requested, list) and requested:
@@ -264,5 +380,15 @@ class YtDlpDownloader:
         file_path = info.get("filepath")
         if file_path:
             return Path(file_path)
+
+        entries = info.get("entries")
+        if isinstance(entries, list):
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                try:
+                    return self._resolve_downloaded_file(entry)
+                except RuntimeError:
+                    continue
 
         raise RuntimeError("yt-dlp did not return filepath")

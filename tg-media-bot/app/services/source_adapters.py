@@ -56,6 +56,11 @@ VK_WALL_POST_PATTERN = re.compile(
     r"(?:wall-?\d+_\d+(?:\?.*)?|[^?\s]+\?(?:.*&)?w=wall-?\d+_\d+(?:.*)?)",
     re.IGNORECASE,
 )
+TIKTOK_PHOTO_PATTERN = re.compile(
+    r"(?P<prefix>(?:https?://)?(?:www\.)?tiktok\.com/@[^/\s]+/)"
+    r"photo/(?P<id>\d+)(?P<suffix>(?:\?.*)?)$",
+    re.IGNORECASE,
+)
 
 
 def detect_source(url: str) -> SourceAdapter | None:
@@ -67,3 +72,14 @@ def detect_source(url: str) -> SourceAdapter | None:
 
 def is_vk_wall_post_url(url: str) -> bool:
     return bool(VK_WALL_POST_PATTERN.search(url))
+
+
+def is_tiktok_photo_url(url: str) -> bool:
+    return bool(TIKTOK_PHOTO_PATTERN.search(url.strip()))
+
+
+def tiktok_photo_to_video_url(url: str) -> str:
+    match = TIKTOK_PHOTO_PATTERN.search(url.strip())
+    if not match:
+        return url
+    return f"{match.group('prefix')}video/{match.group('id')}{match.group('suffix') or ''}"

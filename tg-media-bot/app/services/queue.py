@@ -5,7 +5,7 @@ import asyncio
 from pathlib import Path
 
 from aiogram import Bot
-from aiogram.types import FSInputFile
+from aiogram.types import FSInputFile, InputMediaPhoto
 
 from app.bot.keyboards import auth_retry_keyboard
 from app.services.downloader import (
@@ -94,6 +94,25 @@ class DownloadQueue:
                 )
                 await self._bot.send_message(task.chat_id, text)
                 return
+            if task.media_kind == "tiktok_photo":
+                photo_urls, title = await self._downloader.fetch_tiktok_photo_urls(
+                    task.url,
+                    task.adapter,
+                    task.auth_context,
+                )
+                if not photo_urls:
+                    raise SourceUnsupportedError("Не удалось получить фото из TikTok по этой ссылке.")
+
+                await self._jobs.update_status(
+                    task.job_id,
+                    "done",
+                    file_type="photo",
+                    file_size=None,
+                    duration=None,
+                    error_code=None,
+                )
+                await self._send_photo_urls(task.chat_id, photo_urls, title)
+                return
 
             result = await self._downloader.download(
                 task.url,
@@ -141,3 +160,12 @@ class DownloadQueue:
             await self._bot.send_photo(chat_id=chat_id, photo=input_file, caption=title)
         else:
             await self._bot.send_video(chat_id=chat_id, video=input_file, caption=title)
+
+    async def _send_photo_urls(self, chat_id: int, photo_urls: list[str], title: str) -> None:
+        if len(photo_urls) == 1:
+            await self._bot.send_photo(chat_id=chat_id, photo=photo_urls[0], caption=title)
+            return
+        media = []
+        for idx, url in enumerate(photo_urls[:10]):
+            media.append(InputMediaPhoto(media=url, caption=title if idx == 0 else None))
+        await self._bot.send_media_group(chat_id=chat_id, media=media)

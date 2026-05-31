@@ -26,6 +26,7 @@ HELP_TEXT = (
     "Примеры ссылок:\n"
     "• https://www.youtube.com/watch?v=...\n"
     "• https://www.tiktok.com/@.../video/...\n"
+    "• https://www.tiktok.com/@.../photo/...\n"
     "• https://www.instagram.com/reel/...\n"
     "• https://music.yandex.ru/album/.../track/...\n"
     "• https://vk.com/...\n\n"

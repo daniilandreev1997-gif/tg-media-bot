@@ -1,4 +1,9 @@
-from app.services.source_adapters import detect_source, is_vk_wall_post_url
+from app.services.source_adapters import (
+    detect_source,
+    is_tiktok_photo_url,
+    is_vk_wall_post_url,
+    tiktok_photo_to_video_url,
+)
 
 
 def test_detect_instagram() -> None:
@@ -46,3 +51,14 @@ def test_vk_wall_post_query_url_detected() -> None:
 
 def test_vk_non_wall_url_is_not_wall_post() -> None:
     assert not is_vk_wall_post_url("https://vk.com/video-1_2")
+
+
+def test_tiktok_photo_url_detected() -> None:
+    assert is_tiktok_photo_url("https://www.tiktok.com/@iozb8/photo/7644591363715058958")
+
+
+def test_tiktok_photo_url_converted_to_video() -> None:
+    converted = tiktok_photo_to_video_url(
+        "https://www.tiktok.com/@iozb8/photo/7644591363715058958?lang=ru"
+    )
+    assert converted == "https://www.tiktok.com/@iozb8/video/7644591363715058958?lang=ru"
