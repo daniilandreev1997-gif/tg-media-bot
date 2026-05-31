@@ -220,7 +220,11 @@ class YtDlpDownloader:
                 }
             ]
         elif media_kind == "video":
-            options["format"] = "bestvideo+bestaudio/best"
+            options["format"] = (
+                "best[ext=mp4][acodec!=none][vcodec!=none]/"
+                "best[acodec!=none][vcodec!=none]/"
+                "bestvideo+bestaudio/best"
+            )
             options["merge_output_format"] = "mp4"
         elif media_kind == "video_safe":
             options["format"] = "best[ext=mp4]/best"

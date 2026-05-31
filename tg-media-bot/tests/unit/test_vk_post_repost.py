@@ -83,6 +83,20 @@ def test_vk_post_options_allow_playlist_and_skip_format_selection() -> None:
     assert "format" not in options
 
 
+def test_video_options_prioritize_progressive_mp4() -> None:
+    downloader = YtDlpDownloader(_settings())
+    options = downloader._build_options(
+        adapter=type("A", (), {"name": "youtube"})(),
+        auth_context=None,
+        download=True,
+        media_kind="video",
+    )
+
+    fmt = options["format"]
+    assert "best[ext=mp4][acodec!=none][vcodec!=none]" in fmt
+    assert options["merge_output_format"] == "mp4"
+
+
 def test_resolve_downloaded_file_from_playlist_entries() -> None:
     downloader = YtDlpDownloader(_settings())
     info = {

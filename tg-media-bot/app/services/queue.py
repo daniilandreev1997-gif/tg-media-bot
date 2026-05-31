@@ -6,6 +6,7 @@ from pathlib import Path
 
 from aiogram import Bot
 from aiogram.types import FSInputFile, InputMediaPhoto
+from aiogram.exceptions import TelegramBadRequest
 
 from app.bot.keyboards import auth_retry_keyboard
 from app.services.downloader import (
@@ -145,6 +146,9 @@ class DownloadQueue:
         except DependencyMissingError as exc:
             await self._jobs.update_status(task.job_id, "failed", error_code="DEPENDENCY_MISSING")
             await self._bot.send_message(task.chat_id, str(exc))
+        except TelegramBadRequest as exc:
+            await self._jobs.update_status(task.job_id, "failed", error_code="TELEGRAM_BAD_REQUEST")
+            await self._bot.send_message(task.chat_id, self._friendly_telegram_error(exc))
         except Exception:
             await self._jobs.update_status(task.job_id, "failed", error_code="DOWNLOAD_ERROR")
             await self._bot.send_message(
@@ -169,3 +173,12 @@ class DownloadQueue:
         for idx, url in enumerate(photo_urls[:10]):
             media.append(InputMediaPhoto(media=url, caption=title if idx == 0 else None))
         await self._bot.send_media_group(chat_id=chat_id, media=media)
+
+    @staticmethod
+    def _friendly_telegram_error(exc: TelegramBadRequest) -> str:
+        message = str(exc).lower()
+        if "file is too big" in message or "request entity too large" in message:
+            return "Видео получилось слишком большим для отправки Telegram-ботом. Попробуйте аудио."
+        if "wrong file identifier/http url specified" in message:
+            return "Telegram не смог принять этот файл. Попробуйте другой формат."
+        return "Telegram отклонил отправку файла. Попробуйте другой формат или ссылку."
