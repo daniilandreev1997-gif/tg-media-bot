@@ -1,7 +1,22 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
+import sys
+
+
+def _bootstrap_import_path(package_name: str | None, file_path: str) -> None:
+    """Allow running as module and as direct file path."""
+    if package_name:
+        return
+    project_root = Path(file_path).resolve().parent.parent
+    root_str = str(project_root)
+    if root_str not in sys.path:
+        sys.path.insert(0, root_str)
+
+
+_bootstrap_import_path(__package__, __file__)
 
 from aiohttp import web
 from aiogram import Bot, Dispatcher
