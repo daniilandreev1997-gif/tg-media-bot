@@ -12,6 +12,12 @@ class UserRepository:
     def __init__(self, db: Database):
         self._db = db
 
+    async def list_telegram_ids(self) -> list[int]:
+        rows = await self._db.fetchall(
+            "SELECT telegram_id FROM users ORDER BY id",
+        )
+        return [int(row["telegram_id"]) for row in rows]
+
     async def get_or_create(self, telegram_id: int) -> int:
         row = await self._db.fetchone(
             "SELECT id FROM users WHERE telegram_id = ?",

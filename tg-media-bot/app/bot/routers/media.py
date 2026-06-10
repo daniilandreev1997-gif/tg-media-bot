@@ -30,15 +30,15 @@ def _user_id(message: Message | CallbackQuery) -> int | None:
 @router.message(F.text)
 async def url_message_handler(message: Message, app_ctx: AppContext) -> None:
     text = (message.text or "").strip()
-    adapter = detect_source(text)
-    if adapter is None:
-        return
-
     user_tg_id = _user_id(message)
     if user_tg_id is None:
         return
 
     user_id = await app_ctx.users.get_or_create(user_tg_id)
+    adapter = detect_source(text)
+    if adapter is None:
+        return
+
     await message.answer("Ссылка принята, обрабатываю...")
 
     if adapter.name == "vk" and is_vk_wall_post_url(text):
